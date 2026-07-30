@@ -1,6 +1,6 @@
-name = "dropsync-signaling"
+name = "dropsync2-0-backend"
 main = "src/index.ts"
-compatibility_date = "2024-03-20"
+compatibility_date = "2024-09-23"
 workers_dev = true
 
 [[durable_objects.bindings]]
@@ -9,7 +9,7 @@ class_name = "SignalingRoom"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["SignalingRoom"]
+new_sqlite_classes = ["SignalingRoom"]
 
 [vars]
 ENVIRONMENT = "production"
