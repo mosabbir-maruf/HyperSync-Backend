@@ -1,0 +1,21 @@
+name = "dropsync-signaling"
+main = "src/index.ts"
+compatibility_date = "2024-03-20"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "SIGNALING_ROOM"
+class_name = "SignalingRoom"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SignalingRoom"]
+
+[vars]
+ENVIRONMENT = "production"
+PROTOCOL_VERSION = 1
+SESSION_TIMEOUT_MS = 900000
+HEARTBEAT_INTERVAL_MS = 20000
+RECONNECT_WINDOW_MS = 30000
+MAX_MESSAGE_SIZE = 16384
+SESSION_CODE_LENGTH = 6
