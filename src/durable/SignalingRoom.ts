@@ -148,7 +148,8 @@ export class SignalingRoom {
         }), { status: 200 });
       }
 
-      if (request.headers.get("Upgrade") === "websocket") {
+      const upgrade = request.headers.get("Upgrade")?.toLowerCase();
+      if (upgrade && upgrade.includes("websocket")) {
         const pair = new WebSocketPair();
         const client = pair[0];
         const server = pair[1];

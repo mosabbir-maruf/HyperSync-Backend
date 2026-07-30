@@ -32,8 +32,8 @@ export class Router {
 
       // Upgrade WebSocket route
       if (path === "/ws") {
-        const upgradeHeader = request.headers.get("Upgrade");
-        if (!upgradeHeader || upgradeHeader !== "websocket") {
+        const upgradeHeader = request.headers.get("Upgrade")?.toLowerCase();
+        if (!upgradeHeader || !upgradeHeader.includes("websocket")) {
           return jsonError("UpgradeRequired", "UPGRADE_REQUIRED", "Expected Upgrade: websocket", 426);
         }
 
