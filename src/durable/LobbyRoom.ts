@@ -8,10 +8,16 @@ interface DevicePresence {
   lastSeen: number;
 }
 
+/**
+ * Global discovery lobby using the CF Durable Object Hibernation WebSocket API.
+ * Using `this.state.acceptWebSocket()` (not `server.accept()`) is critical:
+ * it lets the DO hibernate between messages without losing registered sockets,
+ * and getWebSockets() correctly returns all live connections across wake-ups.
+ *
+ * In-memory roster is fine — if the DO restarts, clients reconnect automatically.
+ */
 export class LobbyRoom {
   private roster = new Map<string, DevicePresence>();
-  private sockets = new Map<string, WebSocket>();
-  private wsToPeerId = new WeakMap<WebSocket, string>();
 
   constructor(private state: DurableObjectState, private env: Env) {}
 
@@ -22,20 +28,9 @@ export class LobbyRoom {
     }
 
     const { 0: client, 1: server } = new WebSocketPair();
-    
-    server.accept();
 
-    server.addEventListener("message", async (event) => {
-      try {
-        const msg = JSON.parse(event.data as string);
-        await this.handleMessage(server, msg);
-      } catch (err) {
-        console.error("Lobby message error:", err);
-      }
-    });
-
-    server.addEventListener("close", () => this.handleClose(server));
-    server.addEventListener("error", () => this.handleClose(server));
+    // Use the hibernation API — keeps DO alive and sockets accessible across warm-ups
+    this.state.acceptWebSocket(server);
 
     return new Response(null, {
       status: 101,
@@ -43,72 +38,114 @@ export class LobbyRoom {
     });
   }
 
-  private async handleMessage(ws: WebSocket, msg: any) {
+  // --- Hibernation WebSocket handlers ---
+
+  async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
+    if (typeof message !== "string") return;
+
+    let msg: any;
+    try {
+      msg = JSON.parse(message);
+    } catch {
+      return;
+    }
+
     if (msg.type === "ANNOUNCE") {
-      const peerId = msg.peerId;
+      const peerId: string = msg.peerId;
       if (!peerId) return;
 
       const profile = msg.payload?.profile;
       if (!profile) return;
 
-      this.wsToPeerId.set(ws, peerId);
-      this.sockets.set(peerId, ws);
-      
+      // Tag this WebSocket with the peerId so we can look it up later
+      ws.serializeAttachment({ peerId });
+
       this.roster.set(peerId, {
         peerId,
-        name: profile.name,
-        platform: profile.platform,
-        color: profile.color,
+        name: profile.name ?? "Unknown",
+        platform: profile.platform ?? "Unknown",
+        color: profile.color ?? "#888",
         lastSeen: Date.now(),
       });
 
       this.broadcastRoster();
     } else if (msg.type === "INVITE") {
-      const targetPeerId = msg.payload?.targetPeerId;
-      const code = msg.payload?.code;
+      const targetPeerId: string = msg.payload?.targetPeerId;
+      const code: string = msg.payload?.code;
       if (!targetPeerId || !code) return;
 
-      const targetWs = this.sockets.get(targetPeerId);
-      if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-        targetWs.send(JSON.stringify({
-          type: "INVITE",
-          payload: { code }
-        }));
+      // Find the target socket by its attachment
+      for (const s of this.state.getWebSockets()) {
+        const att = this.getAttachment(s);
+        if (att?.peerId === targetPeerId) {
+          s.send(JSON.stringify({ type: "INVITE", payload: { code } }));
+          break;
+        }
       }
     } else if (msg.type === "PING") {
+      // Update lastSeen
+      const att = this.getAttachment(ws);
+      if (att?.peerId) {
+        const entry = this.roster.get(att.peerId);
+        if (entry) entry.lastSeen = Date.now();
+      }
       ws.send(JSON.stringify({ type: "PONG" }));
     }
   }
 
-  private handleClose(ws: WebSocket) {
-    const peerId = this.wsToPeerId.get(ws);
-    if (peerId) {
-      this.sockets.delete(peerId);
-      this.roster.delete(peerId);
+  async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
+    const att = this.getAttachment(ws);
+    if (att?.peerId) {
+      this.roster.delete(att.peerId);
       this.broadcastRoster();
     }
   }
 
+  async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
+    await this.webSocketClose(ws, 1011, "error");
+  }
+
+  private getAttachment(ws: WebSocket): { peerId: string } | null {
+    try {
+      const att = ws.deserializeAttachment();
+      return att as { peerId: string } | null;
+    } catch {
+      return null;
+    }
+  }
+
   private broadcastRoster() {
-    const devices = Array.from(this.roster.values()).map(d => ({
+    const allSockets = this.state.getWebSockets();
+
+    // Rebuild roster from live sockets only (auto-prune stale entries)
+    const liveIds = new Set<string>();
+    for (const s of allSockets) {
+      const att = this.getAttachment(s);
+      if (att?.peerId) liveIds.add(att.peerId);
+    }
+    // Prune roster of disconnected peers
+    for (const [id] of this.roster) {
+      if (!liveIds.has(id)) this.roster.delete(id);
+    }
+
+    const devices = Array.from(this.roster.values()).map((d) => ({
       peerId: d.peerId,
       name: d.name,
       platform: d.platform,
-      color: d.color
+      color: d.color,
     }));
 
-    const rosterMsg = JSON.stringify({
-      type: "ROSTER",
-      payload: { devices }
-    });
+    for (const s of allSockets) {
+      const att = this.getAttachment(s);
+      // Send each device the roster WITHOUT itself
+      const filtered = att?.peerId
+        ? devices.filter((d) => d.peerId !== att.peerId)
+        : devices;
 
-    for (const ws of this.sockets.values()) {
-      if (ws.readyState === WebSocket.OPEN) {
-        try {
-          ws.send(rosterMsg);
-        } catch {
-          // ignore
-        }
+      try {
+        s.send(JSON.stringify({ type: "ROSTER", payload: { devices: filtered } }));
+      } catch {
+        // socket already closed
       }
     }
   }
