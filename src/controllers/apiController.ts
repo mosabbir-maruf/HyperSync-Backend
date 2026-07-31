@@ -4,6 +4,7 @@ import { jsonSuccess } from "../utils/responseFormat";
 
 export interface Env {
   SIGNALING_ROOM: DurableObjectNamespace;
+  LOBBY_ROOM: DurableObjectNamespace;
 }
 
 export class ApiController {

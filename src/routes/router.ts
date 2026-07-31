@@ -30,6 +30,24 @@ export class Router {
         return withErrorHandler(() => controller.joinSession(request));
       }
 
+      // Lobby WebSocket route
+      if (path === "/lobby") {
+        const upgradeHeader = request.headers.get("Upgrade")?.toLowerCase();
+        if (!upgradeHeader || !upgradeHeader.includes("websocket")) {
+          return jsonError("UpgradeRequired", "UPGRADE_REQUIRED", "Expected Upgrade: websocket", 426);
+        }
+
+        const id = this.env.LOBBY_ROOM.idFromName("GLOBAL_LOBBY");
+        const room = this.env.LOBBY_ROOM.get(id);
+        
+        try {
+          return await room.fetch(request.url, request);
+        } catch (err: any) {
+          console.error("Worker routing error to Lobby DO:", err.stack || err.message);
+          return new Response(err.stack || err.message, { status: 500 });
+        }
+      }
+
       // Upgrade WebSocket route
       if (path === "/ws") {
         const upgradeHeader = request.headers.get("Upgrade")?.toLowerCase();

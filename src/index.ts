@@ -1,8 +1,10 @@
 import { Router } from "./routes/router";
 import { SignalingRoom } from "./durable/SignalingRoom";
+import { LobbyRoom } from "./durable/LobbyRoom";
 
 export interface Env {
 	SIGNALING_ROOM: DurableObjectNamespace;
+	LOBBY_ROOM: DurableObjectNamespace;
 }
 
 export default {
@@ -12,4 +14,4 @@ export default {
 	},
 };
 
-export { SignalingRoom };
+export { SignalingRoom, LobbyRoom };
