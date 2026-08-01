@@ -17,11 +17,15 @@ class_name = "GroupSignalingRoom"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["SignalingRoom"]
+new_sqlite_classes = ["SignalingRoom"]
 
 [[migrations]]
 tag = "v2"
-new_classes = ["LobbyRoom", "GroupSignalingRoom"]
+new_sqlite_classes = ["LobbyRoom"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["GroupSignalingRoom"]
 
 [vars]
 ENVIRONMENT = "production"
