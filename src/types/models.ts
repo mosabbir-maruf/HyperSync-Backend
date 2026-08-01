@@ -13,7 +13,8 @@ export enum SessionState {
 
 export enum PeerRole {
   HOST = "HOST",
-  GUEST = "GUEST"
+  GUEST = "GUEST",
+  MEMBER = "MEMBER" // Used for group sessions
 }
 
 export enum ConnectionState {
@@ -38,6 +39,19 @@ export interface Session {
   sessionCode: string;
   host: Peer | null;
   guest: Peer | null;
+  createdAt: number;
+  expiresAt: number;
+  state: SessionState;
+  protocolVersion: number;
+  pendingSignals: MessageEnvelope[];
+}
+
+export interface GroupSession {
+  groupId: string;
+  groupCode: string;
+  hostPeerId: string;
+  members: Peer[];
+  maxMembers: number;
   createdAt: number;
   expiresAt: number;
   state: SessionState;

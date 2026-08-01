@@ -30,6 +30,14 @@ export class Router {
         return withErrorHandler(() => controller.joinSession(request));
       }
 
+      if (method === "POST" && path === "/group/session") {
+        return withErrorHandler(() => controller.createGroupSession(request));
+      }
+
+      if (method === "POST" && path === "/group/join") {
+        return withErrorHandler(() => controller.joinGroupSession(request));
+      }
+
       // Lobby WebSocket route
       if (path === "/lobby") {
         const upgradeHeader = request.headers.get("Upgrade")?.toLowerCase();
@@ -68,6 +76,30 @@ export class Router {
           return await room.fetch(request.url, request);
         } catch (err: any) {
           console.error("Worker routing error to DO:", err.stack || err.message);
+          return new Response(err.stack || err.message, { status: 500 });
+        }
+      }
+
+      // Group WebSocket route
+      if (path === "/group/ws") {
+        const upgradeHeader = request.headers.get("Upgrade")?.toLowerCase();
+        if (!upgradeHeader || !upgradeHeader.includes("websocket")) {
+          return jsonError("UpgradeRequired", "UPGRADE_REQUIRED", "Expected Upgrade: websocket", 426);
+        }
+
+        const sessionCode = url.searchParams.get("code");
+        if (!sessionCode) {
+          return jsonError("ValidationError", "MISSING_CODE", "Missing session code", 400);
+        }
+
+        const normalizedCode = sessionCode.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        const id = this.env.GROUP_SIGNALING_ROOM.idFromName(normalizedCode);
+        const room = this.env.GROUP_SIGNALING_ROOM.get(id);
+        
+        try {
+          return await room.fetch(request.url, request);
+        } catch (err: any) {
+          console.error("Worker routing error to Group DO:", err.stack || err.message);
           return new Response(err.stack || err.message, { status: 500 });
         }
       }

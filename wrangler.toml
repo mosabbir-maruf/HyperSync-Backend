@@ -11,13 +11,17 @@ class_name = "SignalingRoom"
 name = "LOBBY_ROOM"
 class_name = "LobbyRoom"
 
+[[durable_objects.bindings]]
+name = "GROUP_SIGNALING_ROOM"
+class_name = "GroupSignalingRoom"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SignalingRoom"]
 
 [[migrations]]
 tag = "v2"
-new_sqlite_classes = ["LobbyRoom"]
+new_sqlite_classes = ["LobbyRoom", "GroupSignalingRoom"]
 
 [vars]
 ENVIRONMENT = "production"

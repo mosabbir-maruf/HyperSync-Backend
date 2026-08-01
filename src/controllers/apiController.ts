@@ -5,6 +5,7 @@ import { jsonSuccess } from "../utils/responseFormat";
 export interface Env {
   SIGNALING_ROOM: DurableObjectNamespace;
   LOBBY_ROOM: DurableObjectNamespace;
+  GROUP_SIGNALING_ROOM: DurableObjectNamespace;
 }
 
 export class ApiController {
@@ -57,6 +58,76 @@ export class ApiController {
     const sessionCode = b.sessionCode.replace(/[^A-Z0-9]/g, "").toUpperCase();
     const id = this.env.SIGNALING_ROOM.idFromName(sessionCode);
     const room = this.env.SIGNALING_ROOM.get(id);
+
+    const joinReq = new Request("http://do/internal/join", {
+      method: "POST",
+      body: JSON.stringify({ sessionCode })
+    });
+
+    const joinRes = await room.fetch(joinReq);
+    
+    if (!joinRes.ok) {
+      const errText = await joinRes.text();
+      return new Response(errText, { status: joinRes.status, headers: joinRes.headers });
+    }
+
+    const joinData = await joinRes.json();
+    return jsonSuccess(joinData, joinRes.status, joinRes.headers);
+  }
+
+  async createGroupSession(request: Request): Promise<Response> {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      throw new ValidationError("Invalid JSON body");
+    }
+
+    const b = body as Record<string, unknown>;
+    if (!b || !b.hostPeerId || typeof b.hostPeerId !== "string") {
+      throw new ValidationError("Missing or invalid hostPeerId");
+    }
+
+    const sessionData = createSessionData(); // Reuses existing generator for code/id
+    const groupSessionData = {
+      ...sessionData,
+      hostPeerId: b.hostPeerId,
+      maxMembers: typeof b.maxMembers === "number" ? b.maxMembers : 8
+    };
+
+    const id = this.env.GROUP_SIGNALING_ROOM.idFromName(sessionData.sessionCode);
+    const room = this.env.GROUP_SIGNALING_ROOM.get(id);
+    
+    const initReq = new Request("http://do/internal/init", {
+      method: "POST",
+      body: JSON.stringify(groupSessionData)
+    });
+    
+    const initRes = await room.fetch(initReq);
+    if (!initRes.ok) {
+      throw new SessionError(500, "Failed to initialize group session");
+    }
+
+    return jsonSuccess(groupSessionData, 201);
+  }
+
+  async joinGroupSession(request: Request): Promise<Response> {
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      throw new ValidationError("Invalid JSON body");
+    }
+
+    const b = body as Record<string, unknown>;
+
+    if (!b || !b.sessionCode || typeof b.sessionCode !== "string") {
+      throw new ValidationError("Missing or invalid sessionCode");
+    }
+
+    const sessionCode = b.sessionCode.replace(/[^A-Z0-9]/g, "").toUpperCase();
+    const id = this.env.GROUP_SIGNALING_ROOM.idFromName(sessionCode);
+    const room = this.env.GROUP_SIGNALING_ROOM.get(id);
 
     const joinReq = new Request("http://do/internal/join", {
       method: "POST",
