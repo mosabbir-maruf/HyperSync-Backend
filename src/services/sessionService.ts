@@ -8,9 +8,9 @@ export interface SessionCreationResult {
   protocolVersion: number;
 }
 
-export function createSessionData(): SessionCreationResult {
+export function createSessionData(isGroup: boolean = false): SessionCreationResult {
   const sessionId = generateSessionId();
-  const sessionCode = generateSessionCode();
+  const sessionCode = generateSessionCode(isGroup);
   const expiresAt = Date.now() + CONFIG.SESSION_TIMEOUT_MS;
 
   return {

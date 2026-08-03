@@ -5,14 +5,16 @@ export function generateSessionId(): string {
   return crypto.randomUUID();
 }
 
-export function generateSessionCode(): string {
+export function generateSessionCode(isGroup: boolean = false): string {
   const chars = CONFIG.SESSION_CODE_ALPHABET;
-  let code = "";
+  const prefix = isGroup ? "G" : "P";
+  const length = CONFIG.SESSION_CODE_LENGTH - 1; // 5 characters
+  let code = prefix;
   // Use crypto.getRandomValues for secure randomness
-  const array = new Uint8Array(CONFIG.SESSION_CODE_LENGTH);
+  const array = new Uint8Array(length);
   crypto.getRandomValues(array);
   
-  for (let i = 0; i < CONFIG.SESSION_CODE_LENGTH; i++) {
+  for (let i = 0; i < length; i++) {
     code += chars[array[i] % chars.length];
   }
   return code;

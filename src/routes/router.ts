@@ -69,6 +69,9 @@ export class Router {
         }
 
         const normalizedCode = sessionCode.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        if (!normalizedCode.startsWith("P")) {
+          return jsonError("ValidationError", "INVALID_CODE", "Invalid session code for 1-to-1 transfer", 400);
+        }
         const id = this.env.SIGNALING_ROOM.idFromName(normalizedCode);
         const room = this.env.SIGNALING_ROOM.get(id);
         
@@ -93,6 +96,9 @@ export class Router {
         }
 
         const normalizedCode = sessionCode.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        if (!normalizedCode.startsWith("G")) {
+          return jsonError("ValidationError", "INVALID_CODE", "Invalid session code for Group transfer", 400);
+        }
         const id = this.env.GROUP_SIGNALING_ROOM.idFromName(normalizedCode);
         const room = this.env.GROUP_SIGNALING_ROOM.get(id);
         

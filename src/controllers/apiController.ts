@@ -56,6 +56,9 @@ export class ApiController {
     }
 
     const sessionCode = b.sessionCode.replace(/[^A-Z0-9]/g, "").toUpperCase();
+    if (!sessionCode.startsWith("P")) {
+      throw new ValidationError("Invalid session code for 1-to-1 transfer. Group codes cannot be used here.");
+    }
     const id = this.env.SIGNALING_ROOM.idFromName(sessionCode);
     const room = this.env.SIGNALING_ROOM.get(id);
 
@@ -88,7 +91,7 @@ export class ApiController {
       throw new ValidationError("Missing or invalid hostPeerId");
     }
 
-    const sessionData = createSessionData(); // Reuses existing generator for code/id
+    const sessionData = createSessionData(true); // Reuses existing generator with group prefix
     const groupSessionData = {
       ...sessionData,
       hostPeerId: b.hostPeerId,
@@ -126,6 +129,9 @@ export class ApiController {
     }
 
     const sessionCode = b.sessionCode.replace(/[^A-Z0-9]/g, "").toUpperCase();
+    if (!sessionCode.startsWith("G")) {
+      throw new ValidationError("Invalid session code for Group transfer. 1-to-1 codes cannot be used here.");
+    }
     const id = this.env.GROUP_SIGNALING_ROOM.idFromName(sessionCode);
     const room = this.env.GROUP_SIGNALING_ROOM.get(id);
 
