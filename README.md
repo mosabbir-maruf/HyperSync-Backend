@@ -12,6 +12,39 @@
 
 ---
 
+## Features
+
+- ⚡ **Edge Deployed**: Runs on Cloudflare Workers for ultra-low latency signaling across the globe.
+- 💾 **Durable State**: Utilizes Cloudflare Durable Objects backed by SQLite to maintain reliable state for device presence and lobbies.
+- 🔗 **WebSocket Routing**: Efficiently upgrades HTTP connections to WebSockets and routes them to the correct virtual rooms.
+- 👥 **Group Signaling**: N-way WebRTC offer/answer meshing for group file drop rooms.
+- 🛡️ **Zero-Knowledge**: The backend only passes encrypted WebRTC handshakes; it never intercepts or sees the file payload.
+
+## Prerequisites
+
+- [Node.js](https://nodejs.org/) (v18 or newer)
+- npm or yarn
+- [Cloudflare Account](https://dash.cloudflare.com) (for deployment)
+
+## Local Development
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/mosabbir-maruf/HyperSync-Backend.git
+   cd HyperSync-Backend
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Start the local Wrangler dev server:**
+   ```bash
+   npm run dev
+   ```
+   The backend will start locally and mock the Cloudflare Edge environment using `workerd`. Note the localhost port to put into your Frontend's `.env.local`.
+
 ## Architecture
 
 This backend is serverless, running entirely on the Cloudflare global edge network. It utilizes:
