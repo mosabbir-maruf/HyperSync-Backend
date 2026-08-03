@@ -24,7 +24,7 @@ There are three main Durable Object classes:
 2. `SignalingRoom`: Manages 1-to-1 WebRTC signaling (offer/answer/ICE exchange) between two specific peers.
 3. `GroupSignalingRoom`: Manages N-way WebRTC signaling for group sessions where multiple peers connect simultaneously.
 
-## How It Works & Connects
+## System Workflow
 
 ```mermaid
 graph TD
