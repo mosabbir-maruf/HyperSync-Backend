@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" width="120" alt="HyperSync Logo" />
+</p>
+
 # HyperSync Backend
 
 The backend for HyperSync, built using Cloudflare Workers and Durable Objects. It serves as the signaling and presence server to connect peers for direct WebRTC file transfers.
