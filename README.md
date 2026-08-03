@@ -26,6 +26,24 @@ There are three main Durable Object classes:
 
 ## How It Works & Connects
 
+```mermaid
+graph TD
+    Client1[Frontend Client A] <-->|WebSocket| Worker[Cloudflare Worker Router]
+    Client2[Frontend Client B] <-->|WebSocket| Worker
+    
+    subgraph Cloudflare Edge
+        Worker -->|Routes Request| LobbyDO[LobbyRoom Durable Object]
+        Worker -->|Routes Request| SigDO[SignalingRoom Durable Object]
+        Worker -->|Routes Request| GroupDO[GroupSignalingRoom Durable Object]
+    end
+    
+    LobbyDO -.->|Broadcasts Presence| Client1
+    LobbyDO -.->|Broadcasts Presence| Client2
+    
+    SigDO -.->|Forwards SDP/ICE| Client1
+    SigDO -.->|Forwards SDP/ICE| Client2
+```
+
 1. **Routing**: When the frontend initiates a WebSocket connection (`wss://.../ws`), the Worker intercepts the request.
 2. **DO Handoff**: The Worker parses the URL to determine the destination (Lobby, 1-to-1 Room, or Group Room) and forwards the WebSocket connection to the appropriate Durable Object instance.
 3. **Message Broadcast**: The Durable Object receives WebSocket messages (JSON) from one peer and broadcasts them to the other connected peer(s) in that specific room. 
