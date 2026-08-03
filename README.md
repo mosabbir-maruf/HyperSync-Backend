@@ -6,7 +6,8 @@
 ---
 
 <div align="center">
-  <strong>The backend for HyperSync, built using Cloudflare Workers and Durable Objects. It serves as the signaling and presence server to connect peers for direct WebRTC file transfers.</strong>
+  <strong>The backend for HyperSync, built using Cloudflare Workers and Durable Objects. It serves as the signaling and presence server to connect peers for direct WebRTC file transfers.</strong><br>
+  <em>Looking for the web client? Check out the <a href="https://github.com/mosabbir-maruf/HyperSync">HyperSync Frontend</a>.</em>
 </div>
 
 ---
