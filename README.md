@@ -39,7 +39,7 @@ SESSION_CODE_LENGTH = 6
 ## File Structure
 
 ```text
-backend/
+HyperSync-Backend/
 ├── src/
 │   ├── index.ts                # Worker entry point and router
 │   ├── config/                 # Environment variables and constants
