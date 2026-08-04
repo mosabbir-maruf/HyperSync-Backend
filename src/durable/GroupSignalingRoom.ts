@@ -1,4 +1,4 @@
-import { Env } from "../controllers/apiController";
+import { Env } from "../index";
 import { GroupSession, SessionState, Peer, PeerRole, ConnectionState } from "../types/models";
 import { MessageEnvelope, MessageType } from "../protocol/messages";
 import { parseAndValidateMessage } from "../validation/messageValidator";
@@ -23,13 +23,6 @@ export class GroupSignalingRoom {
   
   constructor(private state: DurableObjectState, private env: Env) {
     this.state.blockConcurrencyWhile(async () => {
-      const storedIce = await this.state.storage.get<Record<string, MessageEnvelope[]>>("pendingIce");
-      if (storedIce) {
-        for (const [key, val] of Object.entries(storedIce)) {
-          this.pendingIceCandidates.set(key, val);
-        }
-      }
-      
       const session = await this.state.storage.get<GroupSession>("session");
       if (session && session.state !== SessionState.DESTROYED) {
         await this.ensureAlarm(session);
@@ -100,7 +93,6 @@ export class GroupSignalingRoom {
   private async destroySession(session: GroupSession, closeCode: number, reason: string) {
     session.state = SessionState.DESTROYED;
     await this.state.storage.put("session", session);
-    await this.state.storage.delete("pendingIce");
     this.pendingIceCandidates.clear();
 
     const websockets = this.state.getWebSockets();
@@ -184,11 +176,7 @@ export class GroupSignalingRoom {
   }
 
   private async savePendingIce() {
-    const obj: Record<string, MessageEnvelope[]> = {};
-    for (const [key, val] of this.pendingIceCandidates.entries()) {
-      obj[key] = val;
-    }
-    await this.state.storage.put("pendingIce", obj);
+    // Pending ICE queue is now purely in-memory
   }
 
   private getAttachment(ws: WebSocket): WsAttachment | null {
@@ -340,7 +328,7 @@ export class GroupSignalingRoom {
     const peer = session.members.find(p => p.peerId === attachment.peerId);
     if (peer) {
       peer.lastHeartbeat = Date.now();
-      await this.state.storage.put("session", session);
+      // purely in-memory heartbeat
       await this.ensureAlarm(session);
     }
     

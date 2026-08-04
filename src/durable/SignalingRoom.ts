@@ -1,4 +1,4 @@
-import { Env } from "../controllers/apiController";
+import { Env } from "../index";
 import { Session, SessionState, Peer, PeerRole, ConnectionState } from "../types/models";
 import { MessageEnvelope, MessageType } from "../protocol/messages";
 import { parseAndValidateMessage } from "../validation/messageValidator";
@@ -28,13 +28,6 @@ export class SignalingRoom {
     // In-memory is fine, as long as it flushes quickly. For true worker-restart resilience, 
     // it could be in storage, but we'll use storage.
     this.state.blockConcurrencyWhile(async () => {
-      const storedIce = await this.state.storage.get<Record<string, MessageEnvelope[]>>("pendingIce");
-      if (storedIce) {
-        for (const [key, val] of Object.entries(storedIce)) {
-          this.pendingIceCandidates.set(key, val);
-        }
-      }
-      
       // Setup alarms for session expiration and timeout handling
       const session = await this.state.storage.get<Session>("session");
       if (session && session.state !== SessionState.DESTROYED) {
@@ -98,7 +91,6 @@ export class SignalingRoom {
   private async destroySession(session: Session, closeCode: number, reason: string) {
     session.state = SessionState.DESTROYED;
     await this.state.storage.put("session", session);
-    await this.state.storage.delete("pendingIce");
     this.pendingIceCandidates.clear();
 
     // Close all websockets
@@ -183,11 +175,7 @@ export class SignalingRoom {
   }
 
   private async savePendingIce() {
-    const obj: Record<string, MessageEnvelope[]> = {};
-    for (const [key, val] of this.pendingIceCandidates.entries()) {
-      obj[key] = val;
-    }
-    await this.state.storage.put("pendingIce", obj);
+    // Pending ICE queue is now purely in-memory
   }
 
   private isValidTransition(oldState: ConnectionState, newState: ConnectionState): boolean {
@@ -364,7 +352,7 @@ export class SignalingRoom {
     const peer = attachment.role === PeerRole.HOST ? session.host : session.guest;
     if (peer) {
       peer.lastHeartbeat = Date.now();
-      await this.state.storage.put("session", session);
+      // purely in-memory heartbeat
       await this.ensureAlarm(session);
     }
     

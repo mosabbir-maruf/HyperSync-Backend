@@ -2,11 +2,7 @@ import { createSessionData } from "../services/sessionService";
 import { SessionError, ValidationError } from "../types/errors";
 import { jsonSuccess } from "../utils/responseFormat";
 
-export interface Env {
-  SIGNALING_ROOM: DurableObjectNamespace;
-  LOBBY_ROOM: DurableObjectNamespace;
-  GROUP_SIGNALING_ROOM: DurableObjectNamespace;
-}
+import { Env } from "../index";
 
 export class ApiController {
   constructor(private env: Env) {}

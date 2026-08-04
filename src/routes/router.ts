@@ -1,7 +1,9 @@
-import { ApiController, Env } from "../controllers/apiController";
+import { ApiController } from "../controllers/apiController";
+import { Env } from "../index";
 import { withErrorHandler } from "../middleware/errorHandler";
 import { corsMiddleware } from "../middleware/cors";
 import { jsonError } from "../utils/responseFormat";
+import { requireWebSocketUpgrade, normalizeSessionCode } from "../utils/ws";
 
 export class Router {
   constructor(private env: Env) {}
@@ -40,10 +42,8 @@ export class Router {
 
       // Lobby WebSocket route
       if (path === "/lobby") {
-        const upgradeHeader = request.headers.get("Upgrade")?.toLowerCase();
-        if (!upgradeHeader || !upgradeHeader.includes("websocket")) {
-          return jsonError("UpgradeRequired", "UPGRADE_REQUIRED", "Expected Upgrade: websocket", 426);
-        }
+        const upgradeError = requireWebSocketUpgrade(request);
+        if (upgradeError) return upgradeError;
 
         const id = this.env.LOBBY_ROOM.idFromName("GLOBAL_LOBBY");
         const room = this.env.LOBBY_ROOM.get(id);
@@ -58,17 +58,15 @@ export class Router {
 
       // Upgrade WebSocket route
       if (path === "/ws") {
-        const upgradeHeader = request.headers.get("Upgrade")?.toLowerCase();
-        if (!upgradeHeader || !upgradeHeader.includes("websocket")) {
-          return jsonError("UpgradeRequired", "UPGRADE_REQUIRED", "Expected Upgrade: websocket", 426);
-        }
+        const upgradeError = requireWebSocketUpgrade(request);
+        if (upgradeError) return upgradeError;
 
         const sessionCode = url.searchParams.get("code");
-        if (!sessionCode) {
+        const normalizedCode = normalizeSessionCode(sessionCode);
+        if (!normalizedCode) {
           return jsonError("ValidationError", "MISSING_CODE", "Missing session code", 400);
         }
 
-        const normalizedCode = sessionCode.replace(/[^A-Z0-9]/gi, "").toUpperCase();
         if (!normalizedCode.startsWith("P")) {
           return jsonError("ValidationError", "INVALID_CODE", "Invalid session code for 1-to-1 transfer", 400);
         }
@@ -85,17 +83,15 @@ export class Router {
 
       // Group WebSocket route
       if (path === "/group/ws") {
-        const upgradeHeader = request.headers.get("Upgrade")?.toLowerCase();
-        if (!upgradeHeader || !upgradeHeader.includes("websocket")) {
-          return jsonError("UpgradeRequired", "UPGRADE_REQUIRED", "Expected Upgrade: websocket", 426);
-        }
+        const upgradeError = requireWebSocketUpgrade(request);
+        if (upgradeError) return upgradeError;
 
         const sessionCode = url.searchParams.get("code");
-        if (!sessionCode) {
+        const normalizedCode = normalizeSessionCode(sessionCode);
+        if (!normalizedCode) {
           return jsonError("ValidationError", "MISSING_CODE", "Missing session code", 400);
         }
 
-        const normalizedCode = sessionCode.replace(/[^A-Z0-9]/gi, "").toUpperCase();
         if (!normalizedCode.startsWith("G")) {
           return jsonError("ValidationError", "INVALID_CODE", "Invalid session code for Group transfer", 400);
         }

@@ -17,20 +17,8 @@ export class SessionError extends BaseError {
   }
 }
 
-export class PeerError extends BaseError {
-  constructor(status: number = 403, message: string) {
-    super(status, message);
-  }
-}
-
 export class ProtocolError extends BaseError {
   constructor(message: string) {
     super(400, message);
-  }
-}
-
-export class ConnectionError extends BaseError {
-  constructor(message: string) {
-    super(500, message);
   }
 }
