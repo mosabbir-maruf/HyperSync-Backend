@@ -43,7 +43,7 @@
    ```bash
    npm run dev
    ```
-   The backend will start locally and mock the Cloudflare Edge environment using `workerd`. Note the localhost port to put into your Frontend's `.env.local`.
+   The backend will start locally and mock the Cloudflare Edge environment using `workerd`. Note the localhost URL (e.g. `http://localhost:8787`) to put into your Frontend's `.env.local` as `BACKEND_URL`.
 
 ## Architecture
 
@@ -134,4 +134,5 @@ HyperSync-Backend/
    # or run directly:
    # npx wrangler deploy
    ```
-4. Update the frontend's `.env` file with the newly generated `*.workers.dev` URL!
+4. Copy the generated `*.workers.dev` URL.
+5. In your Cloudflare Pages dashboard for the Frontend, add a new Environment Variable named `BACKEND_URL` with this live URL to enable the secure proxy.
