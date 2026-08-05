@@ -32,17 +32,8 @@ export class GroupSignalingRoom {
 
   private async ensureAlarm(session: GroupSession) {
     const currentAlarm = await this.state.storage.getAlarm();
-    let nextTick = session.expiresAt;
-
-    for (const peer of session.members) {
-      if (peer.connectionState === ConnectionState.DISCONNECTED) {
-        const timeout = peer.lastHeartbeat + CONFIG.RECONNECT_WINDOW_MS;
-        if (timeout < nextTick) nextTick = timeout;
-      }
-    }
-    
-    if (nextTick !== Infinity && (!currentAlarm || nextTick < currentAlarm)) {
-      await this.state.storage.setAlarm(nextTick);
+    if (!currentAlarm || session.expiresAt < currentAlarm) {
+      await this.state.storage.setAlarm(session.expiresAt);
     }
   }
 
@@ -56,34 +47,6 @@ export class GroupSignalingRoom {
     if (now >= session.expiresAt) {
       await this.destroySession(session, CLOSE_CODES.SESSION_EXPIRED, "Session expired");
       return;
-    }
-
-    // 2. Check Reconnect Timeouts
-    let membersChanged = false;
-    session.members = session.members.filter(peer => {
-      if (peer.connectionState === ConnectionState.DISCONNECTED && (now - peer.lastHeartbeat >= CONFIG.RECONNECT_WINDOW_MS)) {
-        membersChanged = true;
-        this.notifyAll(session, {
-          type: MessageType.GROUP_MEMBER_LEFT,
-          protocolVersion: CONFIG.PROTOCOL_VERSION,
-          sessionId: session.groupId,
-          peerId: "SERVER",
-          timestamp: Date.now(),
-          payload: { peerId: peer.peerId, reason: "timeout" }
-        }, [peer.peerId]);
-        return false; // Remove timed out peer
-      }
-      return true;
-    });
-
-    // If host was removed or everyone is gone, we could keep the group alive for others.
-    if (session.members.length === 0) {
-      await this.destroySession(session, CLOSE_CODES.TIMEOUT, "All members left");
-      return;
-    }
-
-    if (membersChanged) {
-      await this.state.storage.put("session", session);
     }
 
     // Re-schedule alarm if session still alive
@@ -245,7 +208,7 @@ export class GroupSignalingRoom {
           await this.handleReady(ws, msg, session, attachment);
           break;
         case MessageType.GROUP_LEAVE:
-          await this.handleLeave(ws, msg, session, attachment);
+          await this.removePeer(session, attachment.peerId, "left");
           break;
         default:
           this.sendError(ws, "Unsupported message type for group", CLOSE_CODES.UNSUPPORTED_DATA);
@@ -333,8 +296,6 @@ export class GroupSignalingRoom {
     const peer = session.members.find(p => p.peerId === attachment.peerId);
     if (peer) {
       peer.lastHeartbeat = Date.now();
-      // purely in-memory heartbeat
-      await this.ensureAlarm(session);
     }
     
     ws.send(JSON.stringify({
@@ -392,21 +353,25 @@ export class GroupSignalingRoom {
     }
   }
 
-  private async handleLeave(ws: WebSocket, msg: MessageEnvelope, session: GroupSession, attachment: WsAttachment) {
-    session.members = session.members.filter(p => p.peerId !== attachment.peerId);
-    await this.state.storage.put("session", session);
+  private async removePeer(session: GroupSession, peerId: string, reason: string) {
+    const initialCount = session.members.length;
+    session.members = session.members.filter(p => p.peerId !== peerId);
+    
+    if (session.members.length !== initialCount) {
+      await this.state.storage.put("session", session);
 
-    this.notifyAll(session, {
-      type: MessageType.GROUP_MEMBER_LEFT,
-      protocolVersion: CONFIG.PROTOCOL_VERSION,
-      sessionId: session.groupId,
-      peerId: "SERVER",
-      timestamp: Date.now(),
-      payload: { peerId: attachment.peerId, reason: "left" }
-    });
+      this.notifyAll(session, {
+        type: MessageType.GROUP_MEMBER_LEFT,
+        protocolVersion: CONFIG.PROTOCOL_VERSION,
+        sessionId: session.groupId,
+        peerId: "SERVER",
+        timestamp: Date.now(),
+        payload: { peerId, reason }
+      });
 
-    if (session.members.length === 0) {
-      await this.destroySession(session, CLOSE_CODES.NORMAL, "All members left");
+      if (session.members.length === 0) {
+        await this.destroySession(session, CLOSE_CODES.NORMAL, "All members left");
+      }
     }
   }
 
@@ -425,22 +390,7 @@ export class GroupSignalingRoom {
       if (socket !== ws && current?.peerId === attachment.peerId) return;
     }
 
-    const peer = session.members.find(p => p.peerId === attachment.peerId);
-    if (peer) {
-      peer.connectionState = ConnectionState.DISCONNECTED;
-      peer.lastHeartbeat = Date.now();
-      await this.state.storage.put("session", session);
-      await this.ensureAlarm(session);
-
-      this.notifyAll(session, {
-        type: MessageType.ERROR,
-        protocolVersion: CONFIG.PROTOCOL_VERSION,
-        sessionId: session.groupId,
-        peerId: "SERVER",
-        timestamp: Date.now(),
-        payload: { message: `Peer ${attachment.peerId} disconnected temporarily` }
-      }, [attachment.peerId]);
-    }
+    await this.removePeer(session, attachment.peerId, "left");
   }
 
   async webSocketError(ws: WebSocket, error: unknown) {
