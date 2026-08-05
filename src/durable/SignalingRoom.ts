@@ -442,6 +442,14 @@ export class SignalingRoom {
     const session = await this.state.storage.get<Session>("session");
     if (!session || session.state === SessionState.DESTROYED) return;
 
+    // Ignore an old socket closing after the same peer has already rejoined.
+    // Without this guard, the old close callback marks the replacement socket
+    // disconnected and starts an unnecessary reconnect timeout.
+    for (const socket of this.state.getWebSockets()) {
+      const current = this.getAttachment(socket);
+      if (socket !== ws && current?.peerId === attachment.peerId) return;
+    }
+
     const peer = attachment.role === PeerRole.HOST ? session.host : session.guest;
     if (peer && peer.peerId === attachment.peerId) {
       peer.connectionState = ConnectionState.DISCONNECTED;

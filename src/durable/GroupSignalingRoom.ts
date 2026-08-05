@@ -261,6 +261,7 @@ export class GroupSignalingRoom {
     
     // Check if peer is already in session (e.g. reconnect)
     let peer = session.members.find(p => p.peerId === msg.peerId);
+    const isReconnect = Boolean(peer);
     
     if (!peer) {
       if (session.members.length >= session.maxMembers) {
@@ -300,18 +301,22 @@ export class GroupSignalingRoom {
       }
     }));
 
-    // Notify others that a member joined
-    this.notifyAll(session, {
-      type: MessageType.GROUP_MEMBER_JOINED,
-      protocolVersion: CONFIG.PROTOCOL_VERSION,
-      sessionId: session.groupId,
-      peerId: "SERVER",
-      timestamp: Date.now(),
-      payload: {
-        peerId: msg.peerId,
-        role: peer.role
-      }
-    }, [msg.peerId]);
+    // A signaling reconnect does not change group membership. Broadcasting it
+    // as a new join makes every existing peer create another offer and can
+    // overwrite the deterministic offerer role used for recovery.
+    if (!isReconnect) {
+      this.notifyAll(session, {
+        type: MessageType.GROUP_MEMBER_JOINED,
+        protocolVersion: CONFIG.PROTOCOL_VERSION,
+        sessionId: session.groupId,
+        peerId: "SERVER",
+        timestamp: Date.now(),
+        payload: {
+          peerId: msg.peerId,
+          role: peer.role
+        }
+      }, [msg.peerId]);
+    }
   }
 
   private notifyAll(session: GroupSession, msg: MessageEnvelope, excludePeerIds: string[] = []) {
@@ -411,6 +416,14 @@ export class GroupSignalingRoom {
 
     const session = await this.state.storage.get<GroupSession>("session");
     if (!session || session.state === SessionState.DESTROYED) return;
+
+    // A replacement socket may already have joined with this peer ID. The
+    // close callback for the old socket must not mark that new connection as
+    // disconnected.
+    for (const socket of this.state.getWebSockets()) {
+      const current = this.getAttachment(socket);
+      if (socket !== ws && current?.peerId === attachment.peerId) return;
+    }
 
     const peer = session.members.find(p => p.peerId === attachment.peerId);
     if (peer) {
