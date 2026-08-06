@@ -29,7 +29,6 @@ export class LobbyRoom {
 
     const { 0: client, 1: server } = new WebSocketPair();
 
-    // Use the hibernation API — keeps DO alive and sockets accessible across warm-ups
     this.state.acceptWebSocket(server);
 
     return new Response(null, {
@@ -37,8 +36,6 @@ export class LobbyRoom {
       webSocket: client,
     });
   }
-
-  // --- Hibernation WebSocket handlers ---
 
   async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     if (typeof message !== "string") return;
@@ -57,7 +54,6 @@ export class LobbyRoom {
       const profile = msg.payload?.profile;
       if (!profile) return;
 
-      // Tag this WebSocket with the peerId so we can look it up later
       ws.serializeAttachment({ peerId });
 
       this.roster.set(peerId, {
@@ -74,7 +70,6 @@ export class LobbyRoom {
       const code: string = msg.payload?.code;
       if (!targetPeerId || !code) return;
 
-      // Find the target socket by its attachment
       for (const s of this.state.getWebSockets()) {
         const att = this.getAttachment(s);
         if (att?.peerId === targetPeerId) {
@@ -83,7 +78,6 @@ export class LobbyRoom {
         }
       }
     } else if (msg.type === "PING") {
-      // Update lastSeen
       const att = this.getAttachment(ws);
       if (att?.peerId) {
         const entry = this.roster.get(att.peerId);
@@ -117,13 +111,12 @@ export class LobbyRoom {
   private broadcastRoster() {
     const allSockets = this.state.getWebSockets();
 
-    // Rebuild roster from live sockets only (auto-prune stale entries)
+
     const liveIds = new Set<string>();
     for (const s of allSockets) {
       const att = this.getAttachment(s);
       if (att?.peerId) liveIds.add(att.peerId);
     }
-    // Prune roster of disconnected peers
     for (const [id] of this.roster) {
       if (!liveIds.has(id)) this.roster.delete(id);
     }
@@ -137,7 +130,6 @@ export class LobbyRoom {
 
     for (const s of allSockets) {
       const att = this.getAttachment(s);
-      // Send each device the roster WITHOUT itself
       const filtered = att?.peerId
         ? devices.filter((d) => d.peerId !== att.peerId)
         : devices;
@@ -145,7 +137,6 @@ export class LobbyRoom {
       try {
         s.send(JSON.stringify({ type: "ROSTER", payload: { devices: filtered } }));
       } catch {
-        // socket already closed
       }
     }
   }

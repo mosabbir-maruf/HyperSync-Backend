@@ -7,7 +7,6 @@ export function parseAndValidateMessage(rawMessage: string | ArrayBuffer): Messa
     throw new ValidationError("Only string payloads are supported");
   }
 
-  // Reject oversized payloads (max 16KB for signaling)
   if (rawMessage.length > CONFIG.MAX_MESSAGE_SIZE) {
     throw new ValidationError("Payload too large");
   }

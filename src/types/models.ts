@@ -14,7 +14,7 @@ export enum SessionState {
 export enum PeerRole {
   HOST = "HOST",
   GUEST = "GUEST",
-  MEMBER = "MEMBER" // Used for group sessions
+  MEMBER = "MEMBER"
 }
 
 export enum ConnectionState {

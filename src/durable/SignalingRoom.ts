@@ -17,14 +17,11 @@ interface PeerRateLimit {
 
 export class SignalingRoom {
   private rateLimits = new Map<string, PeerRateLimit>();
-  // In-memory queue for ICE candidates sent before the target peer is READY
-  private pendingIceCandidates = new Map<string, MessageEnvelope[]>(); // targetPeerId -> messages
-  // Fallback for local miniflare which might lack serializeAttachment
+  private pendingIceCandidates = new Map<string, MessageEnvelope[]>();
   private wsAttachments = new WeakMap<WebSocket, WsAttachment>();
   
   constructor(private state: DurableObjectState, private env: Env) {
     this.state.blockConcurrencyWhile(async () => {
-      // Setup alarms for session expiration and timeout handling
       const session = await this.state.storage.get<Session>("session");
       if (session && session.state !== SessionState.DESTROYED) {
         await this.ensureAlarm(session);
@@ -51,13 +48,11 @@ export class SignalingRoom {
 
     const now = Date.now();
 
-    // 1. Check Session Expiry
     if (now >= session.expiresAt) {
       await this.destroySession(session, CLOSE_CODES.SESSION_EXPIRED, "Session expired");
       return;
     }
 
-    // 2. Check Reconnect Timeouts
     let hostTimeout = false;
     let guestTimeout = false;
 
@@ -78,7 +73,6 @@ export class SignalingRoom {
       return;
     }
 
-    // Re-schedule alarm if session still alive
     await this.ensureAlarm(session);
   }
 
@@ -87,7 +81,6 @@ export class SignalingRoom {
     await this.state.storage.put("session", session);
     this.pendingIceCandidates.clear();
 
-    // Close all websockets
     const websockets = this.state.getWebSockets();
     for (const ws of websockets) {
       ws.close(closeCode, reason);
@@ -101,7 +94,6 @@ export class SignalingRoom {
       const url = new URL(request.url);
 
       if (url.pathname === "/internal/init") {
-        // Init session
         const data = await request.json() as Record<string, unknown>;
         
         const session: Session = {
@@ -169,14 +161,12 @@ export class SignalingRoom {
   }
 
   private async savePendingIce() {
-    // Pending ICE queue is now purely in-memory
   }
 
   private isValidTransition(oldState: ConnectionState, newState: ConnectionState): boolean {
-    // NEVER ALLOW Invalid Transitions
     if (oldState === ConnectionState.CLOSED) return false;
     if (oldState === ConnectionState.FAILED && newState !== ConnectionState.CLOSED) return false;
-    return true; // Simplistic state transition validation; implement strict graph if needed
+    return true;
   }
 
   private getAttachment(ws: WebSocket): WsAttachment | null {
@@ -185,7 +175,6 @@ export class SignalingRoom {
         const att = ws.deserializeAttachment();
         if (att) return att as WsAttachment;
       } catch (e) {
-        // ignore
       }
     }
     return this.wsAttachments.get(ws) || null;
@@ -197,7 +186,6 @@ export class SignalingRoom {
       try {
         ws.serializeAttachment(attachment);
       } catch (e) {
-        // ignore
       }
     }
   }
@@ -218,13 +206,11 @@ export class SignalingRoom {
     }
 
     try {
-      // Replay protection & Rate limiting
       if (!this.checkRateLimit(msg.peerId)) {
         ws.close(CLOSE_CODES.RATE_LIMITED, "Rate Limit Exceeded");
         return;
       }
 
-      // Initial Registration (JOIN)
       let attachment = this.getAttachment(ws);
       if (!attachment && msg.type === MessageType.JOIN) {
         return await this.handleJoin(ws, msg, session);
@@ -241,7 +227,6 @@ export class SignalingRoom {
         return;
       }
 
-      // Handle messages
       switch (msg.type) {
         case MessageType.PING:
           await this.handlePing(ws, msg, session, attachment);
@@ -258,7 +243,6 @@ export class SignalingRoom {
           await this.handleLeave(ws, msg, session, attachment);
           break;
         default:
-          // Respond with structured error for unknown types handled post-validation
           this.sendError(ws, "Unsupported message type", CLOSE_CODES.UNSUPPORTED_DATA);
       }
     } catch (e: any) {
@@ -277,7 +261,6 @@ export class SignalingRoom {
       return;
     }
 
-    // Check if slot is taken by a DIFFERENT peer
     if (role === PeerRole.HOST && session.host && session.host.peerId !== msg.peerId) {
       this.sendError(ws, "Host already exists", CLOSE_CODES.SESSION_FULL);
       return;
@@ -287,7 +270,6 @@ export class SignalingRoom {
       return;
     }
 
-    // Assign Peer
     const peer: Peer = {
       peerId: msg.peerId,
       role: role,
@@ -299,7 +281,6 @@ export class SignalingRoom {
     if (role === PeerRole.HOST) session.host = peer;
     else session.guest = peer;
 
-    // Session State logic
     if (session.state === SessionState.CREATED) session.state = SessionState.WAITING;
     if (session.host && session.guest && session.state === SessionState.WAITING) {
       session.state = SessionState.PAIRING;
@@ -308,7 +289,6 @@ export class SignalingRoom {
     this.setAttachment(ws, { peerId: msg.peerId, role: role });
     await this.state.storage.put("session", session);
 
-    // Reply with HELLO to confirm successful join
     ws.send(JSON.stringify({
       type: MessageType.HELLO,
       protocolVersion: CONFIG.PROTOCOL_VERSION,
@@ -321,8 +301,6 @@ export class SignalingRoom {
       }
     }));
 
-    // If both are present, notify both peers that the session is ready for negotiation.
-    // Include the role of the peer that just joined so the host knows to initiate the offer.
     if (session.state === SessionState.PAIRING) {
       for (const s of this.state.getWebSockets()) {
         const att = this.getAttachment(s);
@@ -333,9 +311,9 @@ export class SignalingRoom {
           peerId: "SERVER",
           timestamp: Date.now(),
           payload: {
-            joinedRole: role,       // role of the peer that just joined
-            joinedPeerId: msg.peerId, // peerId of the peer that just joined
-            yourRole: att?.role ?? role // tell each peer their own role
+            joinedRole: role,
+            joinedPeerId: msg.peerId,
+            yourRole: att?.role ?? role
           }
         }));
       }
@@ -346,11 +324,9 @@ export class SignalingRoom {
     const peer = attachment.role === PeerRole.HOST ? session.host : session.guest;
     if (peer) {
       peer.lastHeartbeat = Date.now();
-      // purely in-memory heartbeat
       await this.ensureAlarm(session);
     }
     
-    // Reply PONG
     ws.send(JSON.stringify({
       type: MessageType.PONG,
       protocolVersion: CONFIG.PROTOCOL_VERSION,
@@ -367,7 +343,6 @@ export class SignalingRoom {
     session.state = SessionState.NEGOTIATING;
     await this.state.storage.put("session", session);
 
-    // Flush any pending ICE candidates for this peer
     const pending = this.pendingIceCandidates.get(attachment.peerId);
     if (pending && pending.length > 0) {
       for (const iceMsg of pending) {
@@ -379,14 +354,10 @@ export class SignalingRoom {
   }
 
   private async handleSignaling(ws: WebSocket, msg: MessageEnvelope, session: Session, attachment: WsAttachment) {
-    // Find target peer websocket
     const targetRole = attachment.role === PeerRole.HOST ? PeerRole.GUEST : PeerRole.HOST;
     const targetPeer = targetRole === PeerRole.HOST ? session.host : session.guest;
 
-    if (!targetPeer) {
-      // If no target yet, and it's ICE, maybe queue it (though usually they shouldn't send until READY)
-      return;
-    }
+    if (!targetPeer) return;
 
     let targetWs: WebSocket | null = null;
     for (const s of this.state.getWebSockets()) {
@@ -399,20 +370,17 @@ export class SignalingRoom {
 
     if (targetWs) {
       if (msg.type === MessageType.ICE && targetPeer.connectionState !== ConnectionState.CONNECTED) {
-        // Queue ICE if target isn't READY
         let queue = this.pendingIceCandidates.get(targetPeer.peerId) || [];
         queue.push(msg);
         this.pendingIceCandidates.set(targetPeer.peerId, queue);
         await this.savePendingIce();
       } else {
-        // Forward exactly without modification
         targetWs.send(JSON.stringify(msg));
       }
     }
   }
 
   private async handleLeave(ws: WebSocket, msg: MessageEnvelope, session: Session, attachment: WsAttachment) {
-    // Notify other peer if exists
     const targetRole = attachment.role === PeerRole.HOST ? PeerRole.GUEST : PeerRole.HOST;
     const targetPeer = targetRole === PeerRole.HOST ? session.host : session.guest;
     
@@ -436,9 +404,6 @@ export class SignalingRoom {
     const session = await this.state.storage.get<Session>("session");
     if (!session || session.state === SessionState.DESTROYED) return;
 
-    // Ignore an old socket closing after the same peer has already rejoined.
-    // Without this guard, the old close callback marks the replacement socket
-    // disconnected and starts an unnecessary reconnect timeout.
     for (const socket of this.state.getWebSockets()) {
       const current = this.getAttachment(socket);
       if (socket !== ws && current?.peerId === attachment.peerId) return;
@@ -447,11 +412,10 @@ export class SignalingRoom {
     const peer = attachment.role === PeerRole.HOST ? session.host : session.guest;
     if (peer && peer.peerId === attachment.peerId) {
       peer.connectionState = ConnectionState.DISCONNECTED;
-      peer.lastHeartbeat = Date.now(); // Start timeout clock
+      peer.lastHeartbeat = Date.now();
       await this.state.storage.put("session", session);
       await this.ensureAlarm(session);
 
-      // Notify other peer
       const otherPeer = attachment.role === PeerRole.HOST ? session.guest : session.host;
       if (otherPeer) {
         for (const s of this.state.getWebSockets()) {
@@ -472,7 +436,6 @@ export class SignalingRoom {
   }
 
   async webSocketError(ws: WebSocket, error: unknown) {
-    // Automatically calls webSocketClose; logging for diagnostics
     console.error("WebSocket Error:", error);
   }
 

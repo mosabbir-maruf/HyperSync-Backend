@@ -87,7 +87,7 @@ export class ApiController {
       throw new ValidationError("Missing or invalid hostPeerId");
     }
 
-    const sessionData = createSessionData(true); // Reuses existing generator with group prefix
+    const sessionData = createSessionData(true);
     const groupSessionData = {
       ...sessionData,
       hostPeerId: b.hostPeerId,

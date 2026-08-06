@@ -40,7 +40,6 @@ export class Router {
         return withErrorHandler(() => controller.joinGroupSession(request));
       }
 
-      // Lobby WebSocket route
       if (path === "/lobby") {
         const upgradeError = requireWebSocketUpgrade(request);
         if (upgradeError) return upgradeError;
@@ -56,7 +55,6 @@ export class Router {
         }
       }
 
-      // Upgrade WebSocket route
       if (path === "/ws") {
         const upgradeError = requireWebSocketUpgrade(request);
         if (upgradeError) return upgradeError;
@@ -81,7 +79,6 @@ export class Router {
         }
       }
 
-      // Group WebSocket route
       if (path === "/group/ws") {
         const upgradeError = requireWebSocketUpgrade(request);
         if (upgradeError) return upgradeError;

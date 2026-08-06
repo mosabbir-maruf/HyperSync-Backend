@@ -17,8 +17,7 @@ interface PeerRateLimit {
 
 export class GroupSignalingRoom {
   private rateLimits = new Map<string, PeerRateLimit>();
-  // In-memory queue for ICE candidates sent before the target peer is READY
-  private pendingIceCandidates = new Map<string, MessageEnvelope[]>(); // targetPeerId -> messages
+  private pendingIceCandidates = new Map<string, MessageEnvelope[]>();
   private wsAttachments = new WeakMap<WebSocket, WsAttachment>();
   
   constructor(private state: DurableObjectState, private env: Env) {
@@ -43,13 +42,11 @@ export class GroupSignalingRoom {
 
     const now = Date.now();
 
-    // 1. Check Session Expiry
     if (now >= session.expiresAt) {
       await this.destroySession(session, CLOSE_CODES.SESSION_EXPIRED, "Session expired");
       return;
     }
 
-    // Re-schedule alarm if session still alive
     await this.ensureAlarm(session);
   }
 
@@ -135,11 +132,10 @@ export class GroupSignalingRoom {
     }
 
     rl.messagesInWindow++;
-    return rl.messagesInWindow <= (CONFIG.RATE_LIMIT.MAX_MESSAGES_PER_SEC * 3); // Slightly higher for group fan-out signaling
+    return rl.messagesInWindow <= (CONFIG.RATE_LIMIT.MAX_MESSAGES_PER_SEC * 3);
   }
 
   private async savePendingIce() {
-    // Pending ICE queue is now purely in-memory
   }
 
   private getAttachment(ws: WebSocket): WsAttachment | null {
@@ -222,7 +218,6 @@ export class GroupSignalingRoom {
   private async handleJoin(ws: WebSocket, msg: MessageEnvelope, session: GroupSession) {
     const payload = msg.payload as any;
     
-    // Check if peer is already in session (e.g. reconnect)
     let peer = session.members.find(p => p.peerId === msg.peerId);
     const isReconnect = Boolean(peer);
     
@@ -250,7 +245,6 @@ export class GroupSignalingRoom {
     this.setAttachment(ws, { peerId: msg.peerId, role: peer.role });
     await this.state.storage.put("session", session);
 
-    // Reply with HELLO
     ws.send(JSON.stringify({
       type: MessageType.HELLO,
       protocolVersion: CONFIG.PROTOCOL_VERSION,
@@ -340,7 +334,7 @@ export class GroupSignalingRoom {
 
     if (targetWs) {
       const targetPeer = session.members.find(p => p.peerId === targetPeerId);
-      const innerSignal = payload.signal; // { kind: 'ice' | 'offer' | 'answer', ... }
+      const innerSignal = payload.signal;
       
       if (innerSignal && innerSignal.kind === 'ice' && targetPeer && targetPeer.connectionState !== ConnectionState.CONNECTED) {
         let queue = this.pendingIceCandidates.get(targetPeerId) || [];
@@ -382,9 +376,6 @@ export class GroupSignalingRoom {
     const session = await this.state.storage.get<GroupSession>("session");
     if (!session || session.state === SessionState.DESTROYED) return;
 
-    // A replacement socket may already have joined with this peer ID. The
-    // close callback for the old socket must not mark that new connection as
-    // disconnected.
     for (const socket of this.state.getWebSockets()) {
       const current = this.getAttachment(socket);
       if (socket !== ws && current?.peerId === attachment.peerId) return;

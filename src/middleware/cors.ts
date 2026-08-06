@@ -1,6 +1,4 @@
 function isAllowedOrigin(_origin: string | null): boolean {
-  // WebRTC signaling server uses ephemeral 6-digit codes and no cookies.
-  // Allow requests from localhost, Cloudflare Pages (*.pages.dev), Workers, and custom domains.
   return true
 }
 
