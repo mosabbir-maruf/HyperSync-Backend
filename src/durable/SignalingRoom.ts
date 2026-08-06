@@ -23,10 +23,6 @@ export class SignalingRoom {
   private wsAttachments = new WeakMap<WebSocket, WsAttachment>();
   
   constructor(private state: DurableObjectState, private env: Env) {
-    // Restore any pending ICE candidates from storage on wake up if necessary, 
-    // but the prompt says "Pending ICE Queue: Maintain temporary queue... Never leak memory."
-    // In-memory is fine, as long as it flushes quickly. For true worker-restart resilience, 
-    // it could be in storage, but we'll use storage.
     this.state.blockConcurrencyWhile(async () => {
       // Setup alarms for session expiration and timeout handling
       const session = await this.state.storage.get<Session>("session");
@@ -78,8 +74,6 @@ export class SignalingRoom {
     }
 
     if (hostTimeout || guestTimeout) {
-      // If both disconnected, or one timed out and it's essential, we might just destroy
-      // The prompt says "Destroy immediately when: ... Reconnect timeout exceeded"
       await this.destroySession(session, CLOSE_CODES.TIMEOUT, "Reconnect timeout exceeded");
       return;
     }
@@ -182,7 +176,7 @@ export class SignalingRoom {
     // NEVER ALLOW Invalid Transitions
     if (oldState === ConnectionState.CLOSED) return false;
     if (oldState === ConnectionState.FAILED && newState !== ConnectionState.CLOSED) return false;
-    return true; // Simplified for now, implement strict graph if needed
+    return true; // Simplistic state transition validation; implement strict graph if needed
   }
 
   private getAttachment(ws: WebSocket): WsAttachment | null {
@@ -478,7 +472,7 @@ export class SignalingRoom {
   }
 
   async webSocketError(ws: WebSocket, error: unknown) {
-    // Automatically calls webSocketClose, so we just log if needed
+    // Automatically calls webSocketClose; logging for diagnostics
     console.error("WebSocket Error:", error);
   }
 
